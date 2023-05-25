@@ -1,0 +1,116 @@
+@import url('fonts.css');
+h2+.beekash_styling{
+    text-align: center;
+}
+.beekash_styling,
+.beekash_styling+p.submit {
+    max-width: 960px;
+    margin: auto !important;
+}
+
+.beekash_styling+p.submit {
+    text-align: center;
+    margin-top: 20px;
+}
+
+.beekash_styling label,
+.beekash_styling form,
+.beekash_styling #mainform {
+    font-family: "RivalSans";
+}
+
+
+.beekash_styling input:not([type=checkbox]),
+.beekash_styling textarea {
+    margin: 0 !important;
+    outline: 0 !important;
+    -webkit-appearance: none !important;
+    tap-highlight-color: #ffffff00 !important;
+    line-height: 1.21428571em !important;
+    padding: .67857143em 1em !important;
+    font-size: 1em !important;
+    background: #fff !important;
+    border: 1px solid rgba(34, 36, 38, .15) !important;
+    color: rgba(0, 0, 0, .87) !important;
+    border-radius: .28571429rem !important;
+    -webkit-box-shadow: 0 0 0 0 transparent inset !important;
+    box-shadow: 0 0 0 0 transparent inset !important;
+    -webkit-transition: color .1s ease, border-color .1s ease !important;
+    transition: color .1s ease, border-color .1s ease !important;
+    width: 100% !important;
+    vertical-align: top !important;
+    height: 50px !important;
+}
+.beekash_styling select {
+    margin: 0 !important;
+    outline: 0 !important;
+    -webkit-appearance: none !important;
+    tap-highlight-color: #ffffff00 !important;
+    line-height: 1.21428571em !important;
+    padding: .67857143em 1em !important;
+    font-size: 1em !important;
+    border: 1px solid rgba(34, 36, 38, .15) !important;
+    color: rgba(0, 0, 0, .87) !important;
+    border-radius: .28571429rem !important;
+    -webkit-box-shadow: 0 0 0 0 transparent inset !important;
+    box-shadow: 0 0 0 0 transparent inset !important;
+    -webkit-transition: color .1s ease, border-color .1s ease !important;
+    transition: color .1s ease, border-color .1s ease !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    vertical-align: top !important;
+    height: 50px !important;
+}
+
+.beekash_styling input:not([type=checkbox]):focus,
+.beekash_styling textarea:focus {
+    color: rgba(0, 0, 0, .95) !important;
+    border-color: #85b7d9 !important;
+    border-radius: .28571429rem !important;
+    background: #fff !important;
+    -webkit-box-shadow: 0 0 0 0 rgba(34, 36, 38, .35) inset !important;
+    box-shadow: 0 0 0 0 rgba(34, 36, 38, .35) inset !important;
+}
+
+
+
+.beekash_styling+p.submit button {
+    cursor: pointer;
+    display: inline-block;
+    min-height: 1em;
+    outline: 0;
+    border: none;
+    vertical-align: baseline;
+    background: #e0e1e2 none;
+    color: rgba(0, 0, 0, .6);
+    margin: 0 .25em 0 0;
+    padding: .78571429em 1.5em .78571429em;
+    text-transform: none;
+    text-shadow: none;
+    font-weight: 700;
+    line-height: 1em;
+    font-style: normal;
+    text-align: center;
+    text-decoration: none;
+    border-radius: .28571429rem;
+    -webkit-box-shadow: 0 0 0 1px transparent inset, 0 0 0 0 rgba(34, 36, 38, .15) inset;
+    box-shadow: 0 0 0 1px transparent inset, 0 0 0 0 rgba(34, 36, 38, .15) inset;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    -webkit-transition: opacity .1s ease, background-color .1s ease, color .1s ease, background .1s ease, -webkit-box-shadow .1s ease;
+    transition: opacity .1s ease, background-color .1s ease, color .1s ease, background .1s ease, -webkit-box-shadow .1s ease;
+    transition: opacity .1s ease, background-color .1s ease, color .1s ease, box-shadow .1s ease, background .1s ease;
+    transition: opacity .1s ease, background-color .1s ease, color .1s ease, box-shadow .1s ease, background .1s ease, -webkit-box-shadow .1s ease;
+    will-change: '';
+    -webkit-tap-highlight-color: transparent;
+    color: #fff !important;
+}
+
+
+.beekash_styling+p.submit button {
+    background-color: #0d6cb4;
+    height: 50px;
+    width: 240px;
+}

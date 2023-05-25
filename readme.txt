@@ -1,4 +1,3 @@
-# beekash-woocommerce-plugn
 === BeekashPayment Gateway plugin for WooCommerce ===
 Plugin Name: Beekash payment gateway plugin For WooCommerce
 Description: Start accepting payments on your WooCommerce store using Beekash for WooCommerce plugin.
