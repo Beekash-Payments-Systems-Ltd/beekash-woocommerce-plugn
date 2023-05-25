@@ -3,7 +3,7 @@
 Plugin Name: Beekash payment gateway plugin For WooCommerce
 Description: Start accepting payments on your WooCommerce store using Beekash for WooCommerce plugin.
 Tags: Beekash payment, Beekash, payment, payment gateway, online payments, pay now, buy now, e-commerce, gateway, Worldwide
-Author: Beekash
+Author: Gabriel Dagadu
 Version: 1.0.0
 Author URI: https://beekash.net
 License: Apache or later
