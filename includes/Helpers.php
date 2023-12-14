@@ -15,6 +15,6 @@ class Helpers
                 }
             }
         }
-        write_log('SEERBIT LOG: '.$message);
+        write_log('BEEKASH LOG: '.$message);
     }
 }

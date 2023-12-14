@@ -19,7 +19,7 @@ class WC_Gateway_Beekash extends WC_Payment_Gateway_CC
      *
      * @var string
      */
-    public $voucherkard_id;
+    //public $voucherkard_id;
     /**
      * Should custom metadata be enabled?
      *
@@ -94,14 +94,14 @@ class WC_Gateway_Beekash extends WC_Payment_Gateway_CC
      */
     public function __construct()
     {
-        $this->base_url = "https://api.beekash.net/api/v1/"; //API URL
+        $this->base_url = "https://api.beekash.net/v1/"; //API URL
         $this->website_url = "https://beekash.net";
         $this->docs_url = "https://docs.beekash.net";
-        $this->beekash_auth_url = "https://api.beekash.net/sbt/api/v1/auth";
-        $this->checkout_url = "https://checkout.api.beekash.net/api/v1/beekash.js";
-        $this->order_url = "https://api.beekash.net/api/v1/payments/order";
-        $this->beekash_token_encrypt_url = $this->base_url . "encrypt/keys";
-        $this->beekash_transaction_verify = "https://api.beekash.net/api/v1/payments/query/";
+        //$this->beekash_auth_url = "https://api.beekash.net/sbt/api/v1/auth";
+        $this->checkout_url = "https://secure84.beekash.net/scripts/beekash-external-invoice.js";
+        $this->order_url = "https://api.beekash.net/v1/CreateInvoice";
+        //$this->beekash_token_encrypt_url = $this->base_url . "encrypt/keys";
+        $this->beekash_transaction_verify = "https://api.beekash.net/v1/TransactionStatus";
 
         $this->id                 = 'beekash';
         $this->method_title       = __('Beekash', 'beekash-payment');
@@ -121,7 +121,7 @@ class WC_Gateway_Beekash extends WC_Payment_Gateway_CC
         $this->description = $this->get_option('description');
         $this->enabled     = $this->get_option('enabled');
         $this->publish_key = $this->get_option('publish_key');
-        $this->voucherkard_id = $this->get_option('voucherkard_id');
+        //$this->voucherkard_id = $this->get_option('voucherkard_id');
         $this->meta_products = $this->get_option('meta_products') === 'yes' ? true : true;
         $this->auto_complete = $this->get_option( 'auto_complete' ) === 'yes' ? true : false;
 
@@ -148,9 +148,10 @@ class WC_Gateway_Beekash extends WC_Payment_Gateway_CC
     }
 
     public function webhook() {
-        $this->helpers->Log('HIT WEBHOOK');
+        $this->helpers->Log('HIT WEBHOOK BEEKASH CALLBACK');
         if ( ( strtoupper( $_SERVER['REQUEST_METHOD'] ) != 'POST' ) ) {
-            http_response_code( 400 );
+            //http_response_code( 400 );
+            http_response_code( 200 );
             exit;
         }
 
@@ -158,27 +159,42 @@ class WC_Gateway_Beekash extends WC_Payment_Gateway_CC
 
         $request = json_decode( $json );
 
-        $event = $request->notificationItems[0]->notificationRequestItem;
+        $TransactionStatus = $request->TransactionStatus;
+        $TransactionNumber = $request->TransactionNumber;
+        $BankRemarks = $request->BankRemarks;
 
-        $eventBody = $event->data;
-        $eventType = $event->eventType;
-        $reference = $eventBody->reference;
-        $code = $eventBody->gatewayCode;
-        $message = $eventBody->gatewayMessage;
-
-        $reference_split = explode('_', $reference);
-        $order_id = (int)$reference_split[0];
-        $order = wc_get_order($order_id);
-
-        $order_txn_ref = get_post_meta( $order_id, '_beekash_tran_ref', true );
-        if ( $reference != $order_txn_ref ) {
-            exit;
-        }
         #validate transaction reference with the order
 
-        if ($eventType === 'transaction') {
-            if (BeekashStatus::STATUS_SUCCESSFUL == $code) {
+        $beekash_verify_payload =
+        array(
+            'headers' => array('Content-Type' => 'application/json; charset=utf-8'),
+            'body' => json_encode([
+                'publish_key' => $this->publish_key, 
+                'transaction_id' => $TransactionNumber
+            ], true),
+            'method' => 'POST'
+        );
+        $verify_request = wp_remote_post($this->beekash_transaction_verify, $beekash_verify_payload);
+        if (!is_wp_error($verify_request) && 200 === wp_remote_retrieve_response_code($verify_request)) {
+            //Verify transaction validation response from Beekash
+            $beekash_response = json_decode(wp_remote_retrieve_body($verify_request));
+            $this->helpers->Log('VERIFY TRANSACTION SUCCESSFUL: RESPONSE' . json_encode($beekash_response));
+
+            $trans_ref = $beekash_response->result->transaction_ref;
+            $order_details = explode('_', $trans_ref);
+            $order_id = (int)$order_details[0];
+            $order = wc_get_order($order_id);
+            // $status = $order->get_status();
+
+            $order_txn_ref = get_post_meta( $order_id, '_beekash_tran_ref', true );
+            if ( $reference != $order_txn_ref ) {
+                exit;
+            }
+
+            if ("Success" == $beekash_response->result->status_description) {
+                //transaction successful
                 //check if order has been paid for already
+                $this->helpers->Log('TRANSACTION VALIDATION SUCCESSFUL: RESPONSE: ' . json_encode($request));
                 if($order->needs_payment()){
                     $order->payment_complete($order_id);
                     wc_reduce_stock_levels($order_id);
@@ -187,21 +203,26 @@ class WC_Gateway_Beekash extends WC_Payment_Gateway_CC
                     }
                 }
                 exit;
-            }else if (
-                BeekashStatus::STATUS_PENDING == $code
-                || BeekashStatus::STATUS_PENDING_2 == $code
-                || BeekashStatus::STATUS_PENDING_3 == $code
+            } else if (
+                "Pending" == $beekash_response->result->status_description
             ) {
                 //transaction pending
-                $order->update_status('pending', sprintf(__('Payment confirmation is pending from Beekash. Reason: &1', 'beekash-payment'), $message));
+                $this->helpers->Log('TRANSACTION VALIDATION PENDING: RESPONSE: ' . json_encode($request));
+                $order->update_status('pending', sprintf(__('Payment confirmation is pending from Beekash. Reason: &1', 'beekash-payment'), $BankRemarks));
                 exit;
-            } else
-            {
+            } else {
                 //transaction failed
-                $order->update_status('failed', sprintf(__('Payment was declined by Beekash. Reason: &1', 'beekash-payment'), $message));
+                $this->helpers->Log('TRANSACTION VALIDATION FAILED: RESPONSE: ' . json_encode($request));
+                $order->update_status('failed', sprintf(__('Payment was declined by Beekash. Reason: &1', 'beekash-payment'), $BankRemarks));
                 exit;
             }
+        } else {
+            //transaction failed
+            $this->helpers->Log('TRANSACTION VALIDATION FAILED: RESPONSE: ' . json_encode($request));
+            $order->update_status('failed', sprintf(__('Payment was declined by Beekash. Reason: &1', 'beekash-payment'), $BankRemarks));
+            exit;
         }
+
         http_response_code( 200 );
     }
 
@@ -228,7 +249,7 @@ class WC_Gateway_Beekash extends WC_Payment_Gateway_CC
     public function get_icon()
     {
 
-        $icon = '<img src="' . plugins_url('assets/img/beekash.png', WC_SEERBIT_FILE) . '" alt="beekash" style="width:100px;margin-top: 5px"/>';
+        $icon = '<img src="' . plugins_url('assets/img/beekash.png', WC_BEEKASH_FILE) . '" alt="beekash" style="width:100px;margin-top: 5px"/>';
 
         return apply_filters('woocommerce_gateway_icon', $icon, $this->id);
     }
@@ -242,7 +263,8 @@ class WC_Gateway_Beekash extends WC_Payment_Gateway_CC
             return;
         }
         // Check required fields.
-        if (!($this->publish_key && $this->voucherkard_id)) {
+        // if (!($this->publish_key && $this->voucherkard_id)) {
+        if (!($this->publish_key)) {
             echo '<div class="error"><p>' . sprintf(__('Please enter your Beekash merchant details <a href="%s">here</a> to be able to use the Beekash WooCommerce plugin.', 'beekash-payment'), admin_url('admin.php?page=wc-settings&tab=checkout&section=beekash')) . '</p></div>';
             return;
         }
@@ -266,7 +288,8 @@ class WC_Gateway_Beekash extends WC_Payment_Gateway_CC
 
         if ('yes' == $this->enabled) {
 
-            if (!($this->publish_key && $this->voucherkard_id)) {
+            // if (!($this->publish_key && $this->voucherkard_id)) {
+            if (!($this->publish_key)) {
 
                 return false;
             }
@@ -359,13 +382,31 @@ class WC_Gateway_Beekash extends WC_Payment_Gateway_CC
         }
 
         //if checkout redirects with linkingReference, then verify the transaction
-        if (isset($_GET['reference'])){
-            $this->verify_beekash_transaction();
-            return;
+        //var_dump($_GET);
+
+        $link = "";
+        if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {
+            $link = "https";
+        } else {
+            $link = "http";
         }
+        $link .= "://";
+        $link .= $_SERVER['HTTP_HOST'];
+        $link .= $_SERVER['REQUEST_URI'];
 
         $order_key = urldecode($_GET['key']);
         $order_id  = absint(get_query_var('order-pay'));
+        $order = wc_get_order($order_id);
+        $transaction_id = $_GET['transaction_id'];
+
+        if (isset($transaction_id) && !empty($transaction_id)){
+            $order->update_meta_data( 'transaction_id', $transaction_id ); // phpcs:ignore
+            $order->save();
+            $this->verify_beekash_transaction($order_key, $transaction_id);
+            return;
+        }
+
+        
 
         if ( ! $order = wc_get_order( $order_id ) ) {
             return;
@@ -379,7 +420,7 @@ class WC_Gateway_Beekash extends WC_Payment_Gateway_CC
 
         wp_enqueue_script('jquery');
         wp_enqueue_script('beekash', $this->checkout_url, array('jquery'), date("h:i:s"), false);
-        wp_enqueue_script('wc_beekash', plugins_url('assets/js/beekash.js', WC_SEERBIT_FILE), array('jquery', 'beekash'), WC_SEERBIT_VERSION, false);
+        wp_enqueue_script('wc_beekash', plugins_url('assets/js/beekash.js', WC_BEEKASH_FILE), array('jquery', 'beekash'), WC_BEEKASH_VERSION, false);
 
         $params = array(
             'publish_key' => $this->publish_key
@@ -395,14 +436,23 @@ class WC_Gateway_Beekash extends WC_Payment_Gateway_CC
             $currency = get_woocommerce_currency();
             if ($the_order_id == $order_id && $the_order_key == $order_key) {
                 $params['tranref']      = $tranref;
+                $params['invoice_description']      = $tranref;
                 $params['currency']     = $currency;
+                $params['invoice_currency']     = $currency;
                 $params['country']     = $order->get_billing_country();
+                $params['invoice_country']     = $order->get_billing_country();
                 $params['amount']       = $amount;
+                $params['invoice_amount']       = $amount;
                 $params['customer_name'] = $first_name . ' ' . $last_name;
+                $params['invoice_recipient'] = $first_name . ' ' . $last_name;
                 $params['phone_number'] =  method_exists($order, 'get_billing_phone') ? $order->get_billing_phone() : $order->billing_phone;
+                $params['invoice_phone'] =  method_exists($order, 'get_billing_phone') ? $order->get_billing_phone() : $order->billing_phone;
                 $params['encrypted_token'] = $this->GetEncryptedToken();
+                $params['publish_key'] = $this->GetEncryptedToken();
                 $params['endpoint'] = $this->order_url;
+                $params['invoice_return_url'] = $link;
                 $params['customer_email'] = method_exists($order, 'get_billing_email') ? $order->get_billing_email() : $order->billing_email;
+                $params['invoice_email'] = method_exists($order, 'get_billing_email') ? $order->get_billing_email() : $order->billing_email;
             }
 
             if ($this->meta_products) {
@@ -425,23 +475,69 @@ class WC_Gateway_Beekash extends WC_Payment_Gateway_CC
 
                 $params['meta_products'] = $products;
             };
+
             update_post_meta($order_id, '_beekash_tran_ref', $tranref);
+
+            $order = wc_get_order($order_id);
+            // $status = $order->get_status();
+            // get transaction.
+            $transaction = get_post_meta( $order->id, 'beekashpayment', true );
+    
+            //var_dump($transaction);
+    
+            if(!isset($transaction) || empty($transaction)) {
+                $ten_days_later = time() + 10*60*60*24;
+                $beekash_init_payload = array(
+                    'headers' => array('Content-Type' => 'application/json; charset=utf-8'),
+                    'body' => json_encode([
+                        'publish_key' => $this->publish_key, 
+                        'invoice_email' => $params['invoice_email'],
+                        'invoice_description' => $params['invoice_description'],
+                        'invoice_recipient' => $params['invoice_recipient'],
+                        'invoice_phone' => substr($params['invoice_phone'], 0, 10),
+                        'invoice_return_url' => $link,
+                        'invoice_expiry_time' => date('m/d/Y', $ten_days_later),
+                        'invoice_currency' => $params['invoice_currency'],
+                        'invoice_amount' => $params['invoice_amount']
+                    ], true),
+                    'method' => 'POST'
+                );
+                $init_request = wp_remote_post($this->order_url, $beekash_init_payload);
+                if (!is_wp_error($init_request) && 200 === wp_remote_retrieve_response_code($init_request)) {
+                    //init transaction response from Beekash
+                    $init_response = json_decode(wp_remote_retrieve_body($init_request));
+                    $this->helpers->Log('INIT TRANSACTION SUCCESSFUL: RESPONSE' . json_encode($init_response));
+                    $params['pay_for_invoice_terminal_link'] = $init_response->result->pay_for_invoice_terminal_link;
+        
+                    wp_localize_script('wc_beekash', 'wc_params', $params);
+                } else {
+                    $params['pay_for_invoice_terminal_link'] = "";
+                    echo "YOUR REQUEST COULD NOT BE PROCESSED NOW.... PLEASE TRY AGAIN!";
+                }
+                $transaction = $params['pay_for_invoice_terminal_link'];
+                //update_field('beekashpayment', $transaction, $order_id);
+                $order->update_meta_data( 'beekashpayment', $transaction ); // phpcs:ignore
+                $order->save();
+            } else {
+                $params['pay_for_invoice_terminal_link'] = $transaction;
+                wp_localize_script('wc_beekash', 'wc_params', $params);
+            }
         }
-        wp_localize_script('wc_beekash', 'wc_params', $params);
     }
 
     public function GetEncryptedToken()
     {
-        $client_secret =  $this->voucherkard_id . "." . $this->publish_key;
-        $beekash_auth_args =
-            array(
-                'headers'     => array('Content-Type' => 'application/json; charset=utf-8'),
-                'body'        =>  json_encode(['key' => $client_secret], true),
-                'method'      => 'POST'
-            );
-        $token_request = wp_remote_post($this->beekash_token_encrypt_url, $beekash_auth_args);
-        $token_response = json_decode(wp_remote_retrieve_body($token_request));
-        return $token_response;
+        // $client_secret =  $this->voucherkard_id . "." . $this->publish_key;
+        // $beekash_auth_args =
+        //     array(
+        //         'headers'     => array('Content-Type' => 'application/json; charset=utf-8'),
+        //         'body'        =>  json_encode(['key' => $client_secret], true),
+        //         'method'      => 'POST'
+        //     );
+        // $token_request = wp_remote_post($this->beekash_token_encrypt_url, $beekash_auth_args);
+        // $token_response = json_decode(wp_remote_retrieve_body($token_request));
+        // return $token_response;
+        return $this->publish_key;
     }
     /**
      * Process the payment.
@@ -474,79 +570,87 @@ class WC_Gateway_Beekash extends WC_Payment_Gateway_CC
     /**
      * Verify Beekash payment.
      */
-    public function verify_beekash_transaction()
+    public function verify_beekash_transaction($order_key, $transaction_id)
     {
         @ob_clean();
-        if ( isset( $_REQUEST['reference'] ) ) {
-            $beekash_encrypt_keys_header =
+        // if ( isset( $transaction_id ) ) {
+        if ( 
+            isset( $_REQUEST['transaction_id'] ) && 
+            !empty($_REQUEST['transaction_id']) && 
+            isset( $_REQUEST['key'] ) && 
+            !empty($_REQUEST['key']) 
+        ) {
+            // $trans_ref = $order_key;
+            $trans_ref = $_REQUEST['key'];
+            $order_details = explode('_', $trans_ref);
+            $order_id = absint(get_query_var('order-pay'));
+            // $order_id = (int)$order_details[0];
+            $order = wc_get_order($order_id);
+            // $status = $order->get_status();
+            
+            // get transaction.
+            $beekashpayment = get_post_meta( $order->id, 'beekashpayment', true );
+
+            //echo $trans_ref . '     ' . $order_id . '      ' . $transaction_id;
+
+            $beekash_verify_payload =
                 array(
                     'headers' => array('Content-Type' => 'application/json; charset=utf-8'),
-                    'body' => json_encode(['key' => $this->voucherkard_id . "." . $this->publish_key], true),
+                    'body' => json_encode([
+                        'publish_key' => $this->publish_key, 
+                        'transaction_id' => $_REQUEST['transaction_id']
+                        // 'transaction_id' => $transaction_id,
+                        //'transaction_ref' => $trans_ref,
+                    ], true),
                     'method' => 'POST'
                 );
-            $token_request = wp_remote_post("https://api.beekash.net/api/v1/encrypt/keys", $beekash_encrypt_keys_header);
-            if (!is_wp_error($token_request) && 200 === wp_remote_retrieve_response_code($token_request)) {
-                $token_response = json_decode(wp_remote_retrieve_body($token_request));
-                $this->helpers->Log('GENERATING TOKEN SUCCESSFUL: RESPONSE' . json_encode($token_response));
-                $token = (string)$token_response->data->EncryptedSecKey->encryptedKey;
-                $trans_ref = $_REQUEST['reference'];
-                $beekash_transaction_verify = $this->beekash_transaction_verify . sanitize_text_field($trans_ref);
-                $headers = array(
-                    'Authorization' => 'Bearer ' . $token,
-                    'method' => 'GET'
-                );
-                $args = array(
-                    'headers' => $headers,
-                    'timeout' => 60,
-                );
+            $verify_request = wp_remote_post($this->beekash_transaction_verify, $beekash_verify_payload);
+            if (!is_wp_error($verify_request) && 200 === wp_remote_retrieve_response_code($verify_request)) {
                 //Verify transaction validation response from Beekash
-                $request = wp_remote_get($beekash_transaction_verify, $args);
-                if (!is_wp_error($request) && 200 === wp_remote_retrieve_response_code($request)) {
-                    $beekash_response = json_decode(wp_remote_retrieve_body($request));
-                    $this->helpers->Log('TRANSACTION VALIDATION SUCCESSFUL: RESPONSE: ' . json_encode($beekash_response));
-                    if (BeekashStatus::STATUS_SUCCESSFUL == $beekash_response->data->code) {
-                        //transaction successful
-                        $order_details = explode('_', $trans_ref);
-                        $order_id = (int)$order_details[0];
-                        $order = wc_get_order($order_id);
-                        //check if order has been paid for already
-                            if($order->needs_payment()){
-                                $order->payment_complete($order_id);
-                                wc_reduce_stock_levels($order_id);
-                                if ($this->auto_complete){
-                                    $order->update_status('completed',sprintf(__('Payment via Beekash was successful and order was auto completed (Transaction Reference: %s)', 'beekash-payment'), $trans_ref));
-                                }
+                $beekash_response = json_decode(wp_remote_retrieve_body($verify_request));
+                $this->helpers->Log('VERIFY TRANSACTION SUCCESSFUL: RESPONSE' . json_encode($beekash_response));
+
+                // if (BeekashStatus::STATUS_SUCCESSFUL == $beekash_response->result->status_code) {
+                if ("Success" == $beekash_response->result->status_description) {
+                    //transaction successful
+                    //check if order has been paid for already
+                        echo  'STATUS    -   ' . $order->get_status();
+                        if($order->needs_payment()){
+                            $order->payment_complete($order_id);
+                            wc_reduce_stock_levels($order_id);
+                            if ($this->auto_complete){
+                                $order->update_status('completed',sprintf(__('Payment via Beekash was successful and order was auto completed (Transaction Reference: %s)', 'beekash-payment'), $trans_ref));
                             }
-                        wp_redirect($this->get_return_url($order));
-                        exit;
-                    }else if (
-                        BeekashStatus::STATUS_PENDING == $beekash_response->data->code
-                        || BeekashStatus::STATUS_PENDING_2 == $beekash_response->data->code
-                        || BeekashStatus::STATUS_PENDING_3 == $beekash_response->data->code
-                    ) {
-                        //transaction pending
-                        $order_details = explode('_', $trans_ref);
-                        $order_id = (int)$order_details[0];
-                        $order = wc_get_order($order_id);
-                        $order->update_status('pending', __('Payment confirmation is pending from Beekash.', 'beekash-payment'));
-                        exit;
-                    } else
-                    {
-                        //transaction failed
-                        $order_details = explode('_', $trans_ref);
-                        $order_id = (int)$order_details[0];
-                        $order = wc_get_order($order_id);
-                        $order->update_status('failed', __('Payment was declined by Beekash.', 'beekash-payment'));
-                        exit;
-                    }
-                }else{
-                    $beekash_response = json_decode(wp_remote_retrieve_body($request));
-                    $this->helpers->Log('TRANSACTION VALIDATION FAILED: RESPONSE: ' . json_encode($beekash_response));
-                    wc_add_notice(  'Please try again.', 'error' );
+                        }
+                    wp_redirect($this->get_return_url($order));
                     exit;
+                // } else if (
+                //     BeekashStatus::STATUS_PENDING == $beekash_response->result->status_code
+                //     || BeekashStatus::STATUS_PENDING_2 == $beekash_response->result->status_code
+                //     || BeekashStatus::STATUS_PENDING_3 == $beekash_response->result->status_code
+                // ) {
+                } else if (
+                    "Pending" == $beekash_response->result->status_description
+                ) {
+                    //transaction pending
+                    $order = wc_get_order($order_id);
+                    $order->update_status('pending', __('Payment confirmation is pending from Beekash.', 'beekash-payment'));
+                    echo  'STATUS    -   ' . $order->get_status();
+                    //exit;
+                } else {
+                    //transaction failed
+                    $order = wc_get_order($order_id);
+                    $order->update_status('failed', __('Payment was declined by Beekash.', 'beekash-payment'));
+                    echo  'STATUS    -   ' . $order->get_status();
+                    //exit;
                 }
+            } else {
+                $beekash_response = json_decode(wp_remote_retrieve_body($request));
+                $this->helpers->Log('TRANSACTION VALIDATION FAILED: RESPONSE: ' . json_encode($beekash_response));
+                wc_add_notice(  'Please try again.', 'error' );
+                exit;
             }
-            $this->helpers->Log('ERROR GENERATING TOKEN: RESPONSE' . json_encode(wp_remote_retrieve_body($token_request)));
+            $this->helpers->Log('ERROR VERIFYING RESPONSE' . json_encode(wp_remote_retrieve_body($verify_request)));
             wc_add_notice(  'Unable to complete. Kindly contact support.', 'error' );
             exit;
         }

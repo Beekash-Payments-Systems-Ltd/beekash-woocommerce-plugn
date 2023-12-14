@@ -16,9 +16,9 @@ Stable tag: 1.3.8
 if (!defined('ABSPATH')) {
 	exit;
 }
-define( 'WC_SEERBIT_FILE', __FILE__ );
-define( 'WC_SEERBIT_URL', untrailingslashit( plugins_url( '/', __FILE__ ) ) );
-define( 'WC_SEERBIT_VERSION', '1.3.8' );
+define( 'WC_BEEKASH_FILE', __FILE__ );
+define( 'WC_BEEKASH_URL', untrailingslashit( plugins_url( '/', __FILE__ ) ) );
+define( 'WC_BEEKASH_VERSION', '1.3.8' );
 
 
 /**

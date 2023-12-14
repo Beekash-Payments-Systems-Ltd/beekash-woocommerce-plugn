@@ -60,7 +60,7 @@ To configure the plugin, go to __WooCommerce > Settings__ from the left hand me
 * __Title__ - allows you to determine what your customers will see this payment option as on the checkout page.
 * __Description__ - controls the message that appears under the payment fields on the checkout page.
 * __Publish Key__ - Enter your  Publish Key here. Get your API keys from your Beekash Account Dashboard under Profile Settings
-* __VoucherKard ID__ - Enter your VoucherKard ID here. Get it from your Beekash Account Dashboard under VoucherKard
+<!-- * __VoucherKard ID__ - Enter your VoucherKard ID here. Get it from your Beekash Account Dashboard under VoucherKard -->
 * Click on __Save Changes__ for the changes you made to be effected.
 
 

@@ -5,7 +5,7 @@ jQuery(function ($) {
     });
 
     var onComplete = function (response, closeModal) {
-        if (response.code === "00") {
+        if (response.status_code === "1000") {
             processing = true
             $( 'body' ).block( {
                 message: null,
@@ -37,19 +37,34 @@ jQuery(function ($) {
             return true;
         }
 
-        var data = {
-            email: wc_params.customer_email,
-            publish_key: wc_params.publish_key,
-            tranref: wc_params.tranref,
-            full_name: wc_params.customer_name,
-            mobile_no: wc_params.phone_number.substr(0,10),
-            callbackurl: window.location.href,
-            country: wc_params.country,
-            currency: wc_params.currency,
-            amount: wc_params.amount,
-        }
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        let mm = today.getMonth() + 2; // Months start at 0!
+        let dd = today.getDate();
 
-        window.BeekashPay(data,onComplete, onCloseCheckout)
+        if (dd < 10) dd = '0' + dd;
+        if (mm < 10) mm = '0' + mm;
+
+        const formattedToday = mm + '/' + dd + '/' + yyyy;
+
+        var options = {
+            invoice_email: wc_params.invoice_email,
+            publish_key: wc_params.publish_key,
+            invoice_description: wc_params.invoice_description,
+            invoice_recipient: wc_params.invoice_recipient,
+            invoice_phone: wc_params.invoice_phone,
+            invoice_return_url: wc_params.invoice_return_url,
+            invoice_expiry_time: wc_params.invoice_expiry_time,
+            invoice_currency: wc_params.invoice_currency,
+            invoice_amount: wc_params.invoice_amount,
+            pay_for_invoice_terminal_link: wc_params.pay_for_invoice_terminal_link,
+        };
+
+        //console.log("options", options);
+        window.location.href = wc_params.pay_for_invoice_terminal_link;
+        //window.BeekashPay(options, onComplete, onCloseCheckout);
+
+        //window.MakeTheCall(paramsParsed,onComplete, onCloseCheckout);
 
         // $.ajax({
         //     url: wc_params.endpoint,
@@ -57,13 +72,17 @@ jQuery(function ($) {
         //     dataType: 'json',
         //     contentType: 'application/json',
         //     headers: {
-        //         'Authorization': `Bearer ${token}`,
+        //         'Content-Type': "application/json; charset=utf-8",
         //     },
-        //     data: JSON.stringify(data),
-        //     success: function (response) {
-        //         window.location.href = response.data.payments.redirectLink;
+        //     data: JSON.stringify(paramsParsed),
+        //     success: function(response) {
+        //         //window.location.href = response.result.pay_for_invoice_terminal_link;
+        //         var options = {
+        //             publish_key: wc_params.publish_key,
+        //             pay_for_invoice_terminal_link: response.result.pay_for_invoice_terminal_link,
+        //         }
+        //         window.BeekashPay(options, onComplete, onCloseCheckout);
         //     }
         // });
-
     }
 });
